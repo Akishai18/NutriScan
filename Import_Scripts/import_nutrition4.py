@@ -5,7 +5,6 @@ import weaviate
 from weaviate.classes.init import Auth
 from weaviate.classes.config import Property, DataType, Configure
 
-print("Current working directory:", os.getcwd())
 
 load_dotenv()
 weaviate_url = os.environ["WEAVIATE_URL"]
@@ -125,7 +124,10 @@ client.collections.create(
     name=collection_name,
     properties=properties,
     vectorizer_config=Configure.Vectorizer.text2vec_weaviate(),
-    generative_config=Configure.Generative.google(project_id=google_project_id)
+    generative_config=Configure.Generative.google(
+        project_id=os.environ["GOOGLE_PROJECT_ID"],
+        model_id="gemini-2.0-flash-001" 
+    )
 )
 
 collection = client.collections.get(collection_name)

@@ -5,7 +5,6 @@ import weaviate
 from weaviate.classes.init import Auth
 from weaviate.classes.config import Property, DataType, Configure
 
-print("Current working directory:", os.getcwd())
 
 load_dotenv()
 weaviate_url = os.environ["WEAVIATE_URL"]
@@ -23,7 +22,7 @@ df = pd.read_csv("data/nutrition2.csv")
 if df.columns[0].startswith("Unnamed"):
     df = df.drop(columns=[df.columns[0]])
 
-# List of numeric columns based on your schema
+#columns based on schema
 numeric_cols = [
     "calories",
     "caloriesefrom_fat",
@@ -104,7 +103,10 @@ client.collections.create(
     name=collection_name,
     properties=properties,
     vectorizer_config=Configure.Vectorizer.text2vec_weaviate(),
-    generative_config=Configure.Generative.google(project_id=os.environ["GOOGLE_PROJECT_ID"])
+    generative_config=Configure.Generative.google(
+        project_id=os.environ["GOOGLE_PROJECT_ID"],
+        model_id="gemini-2.0-flash-001" 
+    )
 )
 
 collection = client.collections.get(collection_name)
