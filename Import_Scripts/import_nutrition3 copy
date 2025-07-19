@@ -1,0 +1,100 @@
+import pandas as pd
+import os
+from dotenv import load_dotenv
+import weaviate
+from weaviate.classes.init import Auth
+from weaviate.classes.config import Property, DataType, Configure
+
+print("Current working directory:", os.getcwd())
+
+load_dotenv()
+weaviate_url = os.environ["WEAVIATE_URL"]
+weaviate_api_key = os.environ["WEAVIATE_API_KEY"]
+google_project_id = os.environ["GOOGLE_PROJECT_ID"]
+
+client = weaviate.connect_to_weaviate_cloud(
+    cluster_url=weaviate_url,
+    auth_credentials=Auth.api_key(weaviate_api_key),
+)
+assert client.is_ready(), "Weaviate connection failed."
+
+df = pd.read_csv("data/nutrition3.csv")
+
+if df.columns[0].startswith("Unnamed"):
+    df = df.drop(columns=[df.columns[0]])
+
+df.rename(columns={
+    "Sat.Fat": "sat_fat",
+    "Food": "food",
+    "Measure": "measure",
+    "Grams": "grams",
+    "Calories": "calories",
+    "Protein": "protein",
+    "Fat": "fat",
+    "Fiber": "fiber",
+    "Carbs": "carbs",
+    "Category": "category"
+}, inplace=True)
+
+numeric_cols = [
+    "grams", "calories", "protein", "fat", "sat_fat", "fiber", "carbs"
+]
+
+for col in numeric_cols:
+    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+
+text_cols = set(df.columns) - set(numeric_cols)
+for col in text_cols:
+    df[col] = df[col].fillna("")
+
+descriptions = {
+    "food": "Name of the food item",
+    "measure": "Serving size measurement",
+    "grams": "Weight in grams",
+    "calories": "Total calories",
+    "protein": "Protein content in grams",
+    "fat": "Total fat in grams",
+    "sat_fat": "Saturated fat in grams",
+    "fiber": "Dietary fiber in grams",
+    "carbs": "Total carbohydrates in grams",
+    "category": "Category or group of the food"
+}
+
+custom_types = {col: DataType.NUMBER if col in numeric_cols else DataType.TEXT for col in df.columns}
+
+collection_name = "FoodNutrition3"
+if client.collections.exists(collection_name):
+    client.collections.delete(collection_name)
+
+properties = []
+for col in df.columns:
+    prop = Property(
+        name=col,
+        data_type=custom_types[col],
+        description=descriptions.get(col, col.replace("_", " ").capitalize())
+    )
+    properties.append(prop)
+
+client.collections.create(
+    name=collection_name,
+    properties=properties,
+    vectorizer_config=Configure.Vectorizer.text2vec_weaviate(),
+    generative_config=Configure.Generative.google(project_id=google_project_id)
+)
+
+collection = client.collections.get(collection_name)
+
+with collection.batch.fixed_size(batch_size=100) as batch:
+    for _, row in df.iterrows():
+        data_obj = row.to_dict()
+        batch.add_object(data_obj)
+        if batch.number_errors > 10:
+            print("Too many errors — stopping upload.")
+            break
+
+if collection.batch.failed_objects:
+    print("Failed objects:", len(collection.batch.failed_objects))
+else:
+    print("Upload complete!")
+
+client.close()

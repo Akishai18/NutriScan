@@ -1,0 +1,125 @@
+import pandas as pd
+import os
+from dotenv import load_dotenv
+import weaviate
+from weaviate.classes.init import Auth
+from weaviate.classes.config import Property, DataType, Configure
+
+print("Current working directory:", os.getcwd())
+
+load_dotenv()
+weaviate_url = os.environ["WEAVIATE_URL"]
+weaviate_api_key = os.environ["WEAVIATE_API_KEY"]
+google_project_id = os.environ["GOOGLE_PROJECT_ID"]
+
+client = weaviate.connect_to_weaviate_cloud(
+    cluster_url=weaviate_url,
+    auth_credentials=Auth.api_key(weaviate_api_key),
+)
+assert client.is_ready(), "Weaviate connection failed."
+
+df = pd.read_csv("data/nutrition2.csv")
+
+if df.columns[0].startswith("Unnamed"):
+    df = df.drop(columns=[df.columns[0]])
+
+# List of numeric columns based on your schema
+numeric_cols = [
+    "calories",
+    "caloriesefrom_fat",
+    "total_fat_g",
+    "total_fat_dv",
+    "sodium_g",
+    "sodium_dv",
+    "potassium_g",
+    "potassium_dv",
+    "total_carbo_hydrate_g",
+    "total_carbo_hydrate_dv",
+    "dietary_fiber_g",
+    "dietary_fiber_dv",
+    "sugars_g",
+    "protein_g",
+    "vitamin_a_dv",
+    "vitamin_c_dv",
+    "calcium_dv",
+    "eeironee_dv",
+    "saturated_fat_dv",
+    "saturated_fat_mg_e",
+    "chole_sterol_dv",
+    "chole_sterol_mg_e",
+]
+
+# Coerce numeric columns to float, replace invalid/missing with 0.0
+for col in numeric_cols:
+    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+
+# For text columns fill NaN with empty string
+text_cols = set(df.columns) - set(numeric_cols)
+for col in text_cols:
+    df[col] = df[col].fillna("")
+
+descriptions = {
+    "food_and_serving": "Name and serving size of the food item",
+    "calories": "Total calories",
+    "caloriesefrom_fat": "Calories from fat",
+    "total_fat_g": "Total fat in grams",
+    "total_fat_dv": "Daily value percentage of total fat",
+    "sodium_g": "Sodium in grams",
+    "sodium_dv": "Daily value percentage of sodium",
+    "potassium_g": "Potassium in grams",
+    "potassium_dv": "Daily value percentage of potassium",
+    "total_carbo_hydrate_g": "Total carbohydrates in grams",
+    "total_carbo_hydrate_dv": "Daily value percentage of total carbs",
+    "dietary_fiber_g": "Dietary fiber in grams",
+    "dietary_fiber_dv": "Daily value percentage of dietary fiber",
+    "sugars_g": "Sugar in grams",
+    "protein_g": "Protein in grams",
+    "vitamin_a_dv": "Daily value percentage of Vitamin A",
+    "vitamin_c_dv": "Daily value percentage of Vitamin C",
+    "calcium_dv": "Daily value percentage of Calcium",
+    "eeironee_dv": "Daily value percentage of Iron",
+    "saturated_fat_dv": "Daily value percentage of Saturated Fat",
+    "saturated_fat_mg_e": "Saturated Fat (mg equivalent)",
+    "chole_sterol_dv": "Daily value percentage of Cholesterol",
+    "chole_sterol_mg_e": "Cholesterol (mg equivalent)",
+    "food_type": "Type or category of the food",
+}
+
+custom_types = {col: DataType.NUMBER if col in numeric_cols else DataType.TEXT for col in df.columns}
+
+collection_name = "FoodNutrition2"
+if client.collections.exists(collection_name):
+    client.collections.delete(collection_name)
+
+properties = []
+for col in df.columns:
+    prop = Property(
+        name=col,
+        data_type=custom_types[col],
+        description=descriptions.get(col, col.replace("_", " ").capitalize())
+    )
+    properties.append(prop)
+
+client.collections.create(
+    name=collection_name,
+    properties=properties,
+    vectorizer_config=Configure.Vectorizer.text2vec_weaviate(),
+    generative_config=Configure.Generative.google(project_id=os.environ["GOOGLE_PROJECT_ID"])
+)
+
+collection = client.collections.get(collection_name)
+
+with collection.batch.fixed_size(batch_size=100) as batch:
+    for _, row in df.iterrows():
+        data_obj = row.to_dict()
+        batch.add_object(data_obj)
+        if batch.number_errors > 10:
+            print("Too many errors — stopping upload.")
+            break
+
+if collection.batch.failed_objects:
+    print("Failed objects:", len(collection.batch.failed_objects))
+else:
+    print("Upload complete!")
+
+client.close()

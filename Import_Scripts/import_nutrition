@@ -1,0 +1,88 @@
+import pandas as pd
+import os
+from dotenv import load_dotenv
+import weaviate
+from weaviate.classes.init import Auth
+from weaviate.classes.config import Property, DataType, Configure
+
+print("Current working directory:", os.getcwd())
+
+load_dotenv()
+weaviate_url = os.environ["WEAVIATE_URL"]
+weaviate_api_key = os.environ["WEAVIATE_API_KEY"]
+
+client = weaviate.connect_to_weaviate_cloud(
+    cluster_url=weaviate_url,
+    auth_credentials=Auth.api_key(weaviate_api_key),
+)
+
+assert client.is_ready(), "Weaviate connection failed."
+
+df = pd.read_csv("data/nutrition.csv")
+
+if df.columns[0].startswith("Unnamed"):
+    df = df.drop(columns=[df.columns[0]])
+
+numerical_cols = set(df.select_dtypes(include=["int64", "float64"]).columns)
+text_cols = set(df.columns) - numerical_cols
+
+df = df.fillna("")
+
+descriptions = {
+    "name": "Name of the food item",
+    "serving_size": "Standard serving size of the food item",
+    "calories": "Total calories in the serving size",
+    "total_fat": "Total fat content (g)",
+    "saturated_fat": "Saturated fat content (g)",
+    "cholesterol": "Cholesterol content (mg)",
+    "sodium": "Sodium content (mg)",
+    "protein": "Protein content (g)",
+    "carbohydrate": "Total carbohydrate content (g)",
+    "fiber": "Dietary fiber content (g)",
+    "sugars": "Total sugars content (g)",
+    "vitamin_c": "Vitamin C content (mg)",
+    "vitamin_d": "Vitamin D content (µg)",
+    "calcium": "Calcium content (mg)",
+    "iron": "Iron content (mg)",
+    "potassium": "Potassium content (mg)",
+    "zink": "Zinc content (mg)",
+    "water": "Water content (g)",
+}
+
+collection_name = "FoodNutrition"
+if client.collections.exists(collection_name):
+    client.collections.delete(collection_name)
+
+properties = []
+for col in df.columns:
+    dtype = DataType.NUMBER if col in numerical_cols else DataType.TEXT
+    prop = Property(
+        name=col,
+        data_type=dtype,
+        description=descriptions.get(col, col.replace("_", " ").capitalize())
+    )
+    properties.append(prop)
+
+client.collections.create(
+    name=collection_name,
+    properties=properties,
+    vectorizer_config=Configure.Vectorizer.text2vec_weaviate(),
+    generative_config=Configure.Generative.google(project_id=os.environ["GOOGLE_PROJECT_ID"])
+)
+
+collection = client.collections.get(collection_name)
+
+with collection.batch.fixed_size(batch_size=100) as batch:
+    for _, row in df.iterrows():
+        data_obj = row.to_dict()
+        batch.add_object(data_obj)
+        if batch.number_errors > 10:
+            print("Too many errors — stopping upload.")
+            break
+
+if collection.batch.failed_objects:
+    print("Failed objects:", len(collection.batch.failed_objects))
+else:
+    print("Upload complete!")
+
+client.close()
