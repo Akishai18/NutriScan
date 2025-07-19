@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Import Press Start 2P font from Google Fonts for a retro/arcade look */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+@layer base {
+  html, body, #root {
+    font-family: 'Press Start 2P', 'system-ui', 'sans-serif';
+    min-height: 100vh;
+    background: url('/c22.jpg') center center/cover no-repeat, #b3e5fc;
+    /* fallback color */
+  }
+  .font-arcade {
+    font-family: 'Press Start 2P', 'system-ui', 'sans-serif';
+  }
+}
+
+@layer utilities {
+  .arcade-outline {
+    text-shadow:
+      2px 2px 0 #2d2d2d,
+      4px 4px 0 #fff,
+      0 0 8px #fff;
+  }
+  .bg-overlay {
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(2px);
+  }
+  .pixel-border-green {
+    box-shadow:
+      0 0 0 4px #14532d,
+      0 0 0 8px #22c55e,
+      0 0 0 12px #bbf7d0;
+  }
+  .pixel-border-yellow {
+    box-shadow:
+      0 0 0 4px #a16207,
+      0 0 0 8px #fde047,
+      0 0 0 12px #fef9c3;
+  }
+}
