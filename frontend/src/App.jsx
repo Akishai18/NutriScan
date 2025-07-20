@@ -10,6 +10,10 @@ function App() {
   // Button state: scan enabled, cancel disabled initially
   const [scanActive, setScanActive] = useState(true);
   const [cancelActive, setCancelActive] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // API base URL
+  const API_BASE_URL = 'http://localhost:5000/api';
 
   // Placeholder send handler
   const handleSend = (e) => {
@@ -20,16 +24,81 @@ function App() {
     }
   };
 
-  // Scan and Cancel button handlers
-  const handleScan = () => {
-    setScanActive(false);
-    setCancelActive(true);
-    // Add scan logic here
+  // Start detection
+  const handleScan = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/start-detection`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        setScanActive(false);
+        setCancelActive(true);
+        setMessages(prev => [...prev, { from: 'bot', text: 'Detection started! Point your camera at food items.' }]);
+      } else {
+        setMessages(prev => [...prev, { from: 'bot', text: `Error: ${data.message}` }]);
+      }
+    } catch (error) {
+      console.error('Error starting detection:', error);
+      setMessages(prev => [...prev, { from: 'bot', text: 'Error connecting to detection service. Please try again.' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
-  const handleCancel = () => {
-    setScanActive(true);
-    setCancelActive(false);
-    // Add cancel logic here
+
+  // Stop detection and get results
+  const handleCancel = async () => {
+    setIsLoading(true);
+    try {
+      // Stop detection
+      const stopResponse = await fetch(`${API_BASE_URL}/stop-detection`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const stopData = await stopResponse.json();
+      
+      if (stopData.status === 'success') {
+        setScanActive(true);
+        setCancelActive(false);
+        setMessages(prev => [...prev, { from: 'bot', text: 'Detection stopped. Getting results...' }]);
+        
+        // Get detection results
+        const resultsResponse = await fetch(`${API_BASE_URL}/detection-results`);
+        const resultsData = await resultsResponse.json();
+        
+        if (resultsData.status === 'success' && resultsData.results.length > 0) {
+          const detectedFoods = resultsData.results.map(item => item.food);
+          const uniqueFoods = [...new Set(detectedFoods)];
+          
+          if (uniqueFoods.length > 0) {
+            setMessages(prev => [...prev, { 
+              from: 'bot', 
+              text: `Detected foods: ${uniqueFoods.join(', ')}. I'll help you find nutrition information!` 
+            }]);
+          } else {
+            setMessages(prev => [...prev, { from: 'bot', text: 'No food items detected. Please try again.' }]);
+          }
+        } else {
+          setMessages(prev => [...prev, { from: 'bot', text: 'No detection results found.' }]);
+        }
+      } else {
+        setMessages(prev => [...prev, { from: 'bot', text: `Error: ${stopData.message}` }]);
+      }
+    } catch (error) {
+      console.error('Error stopping detection:', error);
+      setMessages(prev => [...prev, { from: 'bot', text: 'Error stopping detection. Please try again.' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -70,18 +139,18 @@ function App() {
           <h2 className="text-xl font-bold text-yellow-700 mb-6 tracking-wide">Actions</h2>
           <div className="flex flex-col gap-4 w-full max-w-xs">
             <button
-              className={`arcade-outline py-3 rounded-xl border-4 border-green-800 shadow-lg text-lg font-bold transition-all duration-150 font-arcade ${scanActive ? 'bg-green-500 hover:bg-green-600 text-white active:scale-95 cursor-pointer' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+              className={`arcade-outline py-3 rounded-xl border-4 border-green-800 shadow-lg text-lg font-bold transition-all duration-150 font-arcade ${scanActive && !isLoading ? 'bg-green-500 hover:bg-green-600 text-white active:scale-95 cursor-pointer' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
               onClick={handleScan}
-              disabled={!scanActive}
+              disabled={!scanActive || isLoading}
             >
-              Scan Food
+              {isLoading ? 'Starting...' : 'Scan Food'}
             </button>
             <button
-              className={`arcade-outline py-3 rounded-xl border-4 border-gray-500 shadow-lg text-lg font-bold transition-all duration-150 font-arcade ${cancelActive ? 'bg-red-500 hover:bg-red-600 text-white active:scale-95 cursor-pointer border-red-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+              className={`arcade-outline py-3 rounded-xl border-4 border-gray-500 shadow-lg text-lg font-bold transition-all duration-150 font-arcade ${cancelActive && !isLoading ? 'bg-red-500 hover:bg-red-600 text-white active:scale-95 cursor-pointer border-red-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
               onClick={handleCancel}
-              disabled={!cancelActive}
+              disabled={!cancelActive || isLoading}
             >
-              Cancel
+              {isLoading ? 'Stopping...' : 'Cancel'}
             </button>
           </div>
         </section>
