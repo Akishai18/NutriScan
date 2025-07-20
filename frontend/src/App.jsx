@@ -150,7 +150,6 @@ function App() {
     }
   };
 
-  // Helper to format nutrition info or summary as a list if it's JSON-like
   function formatBotMessage(text) {
     // Try to parse as JSON object
     let parsed;
@@ -169,7 +168,6 @@ function App() {
         </ul>
       );
     }
-    // If it's a string that looks like "key: value\nkey2: value2", split and render as list
     if (typeof text === 'string' && text.includes(':') && text.includes('\n')) {
       const lines = text.split(/\n|\\n/).filter(Boolean);
       if (lines.length > 1) {
@@ -183,7 +181,6 @@ function App() {
         );
       }
     }
-    // Otherwise, render as plain text
     return text;
   }
 
