@@ -15,13 +15,35 @@ function App() {
   // API base URLs
   const API_BASE_URL = 'http://localhost:5000/api';
   const NUTRITION_API_BASE_URL = 'http://localhost:5001/api'; // Nutrition search server
+  const SEARCH_API_BASE_URL = 'http://localhost:5002/api'; // Search server
 
-  // Placeholder send handler
-  const handleSend = (e) => {
+  // Send user message to search API and display results
+  const handleSend = async (e) => {
     e.preventDefault();
-    if (input.trim()) {
-      setMessages([...messages, { from: 'user', text: input }]);
-      setInput('');
+    if (!input.trim()) return;
+    const userMessage = input.trim();
+    setMessages(prev => [...prev, { from: 'user', text: userMessage }]);
+    setInput('');
+    setMessages(prev => [...prev, { from: 'bot', text: 'Searching for your query...' }]);
+    try {
+      const response = await fetch(`${SEARCH_API_BASE_URL}/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: userMessage })
+      });
+      const data = await response.json();
+      if (data.status === 'success' && Array.isArray(data.summaries)) {
+        for (const summaryObj of data.summaries) {
+          setMessages(prev => [...prev, {
+            from: 'bot',
+            text: `(${summaryObj.collection}) ${summaryObj.summary}`
+          }]);
+        }
+      } else {
+        setMessages(prev => [...prev, { from: 'bot', text: 'No results found for your query.' }]);
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, { from: 'bot', text: 'Error searching for your query.' }]);
     }
   };
 
@@ -128,6 +150,43 @@ function App() {
     }
   };
 
+  // Helper to format nutrition info or summary as a list if it's JSON-like
+  function formatBotMessage(text) {
+    // Try to parse as JSON object
+    let parsed;
+    try {
+      parsed = typeof text === 'string' ? JSON.parse(text) : text;
+    } catch {
+      parsed = null;
+    }
+    // If it's an object, render as a list
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return (
+        <ul className="list-disc ml-6">
+          {Object.entries(parsed).map(([key, value]) => (
+            <li key={key}><b>{key}:</b> {value}</li>
+          ))}
+        </ul>
+      );
+    }
+    // If it's a string that looks like "key: value\nkey2: value2", split and render as list
+    if (typeof text === 'string' && text.includes(':') && text.includes('\n')) {
+      const lines = text.split(/\n|\\n/).filter(Boolean);
+      if (lines.length > 1) {
+        return (
+          <ul className="list-disc ml-6">
+            {lines.map((line, idx) => {
+              const [k, ...v] = line.split(':');
+              return <li key={idx}><b>{k.trim()}:</b> {v.join(':').trim()}</li>;
+            })}
+          </ul>
+        );
+      }
+    }
+    // Otherwise, render as plain text
+    return text;
+  }
+
   return (
     <div className="min-h-screen flex flex-col px-2" style={{ fontFamily: "'Inter', 'system-ui', 'sans-serif'" }}>
       {/* Title */}
@@ -145,7 +204,9 @@ function App() {
           <h2 className="text-xl font-bold text-green-800 mb-2 tracking-wide">Chatbot</h2>
           <div className="flex-1 overflow-y-auto mb-4 bg-green-50 rounded-xl p-3 border border-green-200" style={{ fontFamily: "'Inter', 'system-ui', 'sans-serif'" }}>
             {messages.map((msg, idx) => (
-              <div key={idx} className={`mb-2 flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>                <span className={`inline-block px-3 py-2 rounded-2xl text-xs md:text-base ${msg.from === 'user' ? 'bg-yellow-200 text-right' : 'bg-green-200 text-left'} shadow`}>{msg.text}</span>
+              <div key={idx} className={`mb-2 flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>                <span className={`inline-block px-3 py-2 rounded-2xl text-xs md:text-base ${msg.from === 'user' ? 'bg-yellow-200 text-right' : 'bg-green-200 text-left'} shadow`}>
+                  {msg.from === 'bot' ? formatBotMessage(msg.text) : msg.text}
+                </span>
               </div>
             ))}
           </div>
