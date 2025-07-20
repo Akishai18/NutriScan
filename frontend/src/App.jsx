@@ -12,8 +12,9 @@ function App() {
   const [cancelActive, setCancelActive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // API base URL
+  // API base URLs
   const API_BASE_URL = 'http://localhost:5000/api';
+  const NUTRITION_API_BASE_URL = 'http://localhost:5001/api'; // Nutrition search server
 
   // Placeholder send handler
   const handleSend = (e) => {
@@ -52,6 +53,28 @@ function App() {
     }
   };
 
+  // Fetch nutrition info for a food item (from separate server)
+  const fetchNutritionInfo = async (food) => {
+    setMessages(prev => [...prev, { from: 'bot', text: `Searching nutrition info for ${food}...` }]);
+    try {
+      const response = await fetch(`${NUTRITION_API_BASE_URL}/get-nutrition`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ food_item: food })
+      });
+      const data = await response.json();
+      if (data.status === 'success' && data.nutrition_info) {
+        setMessages(prev => [...prev, { from: 'bot', text: `Nutrition info for ${food}: ${data.nutrition_info}` }]);
+      } else {
+        setMessages(prev => [...prev, { from: 'bot', text: `No nutrition info found for ${food}.` }]);
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, { from: 'bot', text: `Error fetching nutrition info for ${food}.` }]);
+    }
+  };
+
   // Stop detection and get results
   const handleCancel = async () => {
     setIsLoading(true);
@@ -84,6 +107,10 @@ function App() {
               from: 'bot', 
               text: `Detected foods: ${uniqueFoods.join(', ')}. I'll help you find nutrition information!` 
             }]);
+            // Fetch nutrition info for each detected food
+            for (const food of uniqueFoods) {
+              await fetchNutritionInfo(food);
+            }
           } else {
             setMessages(prev => [...prev, { from: 'bot', text: 'No food items detected. Please try again.' }]);
           }
@@ -118,8 +145,7 @@ function App() {
           <h2 className="text-xl font-bold text-green-800 mb-2 tracking-wide">Chatbot</h2>
           <div className="flex-1 overflow-y-auto mb-4 bg-green-50 rounded-xl p-3 border border-green-200" style={{ fontFamily: "'Inter', 'system-ui', 'sans-serif'" }}>
             {messages.map((msg, idx) => (
-              <div key={idx} className={`mb-2 flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <span className={`inline-block px-3 py-2 rounded-2xl text-xs md:text-base ${msg.from === 'user' ? 'bg-yellow-200 text-right' : 'bg-green-200 text-left'} shadow`}>{msg.text}</span>
+              <div key={idx} className={`mb-2 flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>                <span className={`inline-block px-3 py-2 rounded-2xl text-xs md:text-base ${msg.from === 'user' ? 'bg-yellow-200 text-right' : 'bg-green-200 text-left'} shadow`}>{msg.text}</span>
               </div>
             ))}
           </div>
