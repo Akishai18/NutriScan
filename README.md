@@ -198,6 +198,5 @@ This project is open source and available under the [MIT License](LICENSE).
 - [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) for object detection
 - [Weaviate](https://weaviate.io/) for vector database technology
 - [OpenCV](https://opencv.org/) for computer vision capabilities
-- All the nutrition APIs that make real-time data possible
 
 ---
