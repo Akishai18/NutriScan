@@ -2,7 +2,7 @@
 
 **Smart Food Recognition for Healthier Choices**
 
-NutriScan empowers users to make informed dietary decisions instantly by combining computer vision with real-time nutrition data. Simply scan your meal, and get detailed nutritional insights right when you need them.
+NutriScan enables users to make informed dietary decisions instantly by combining computer vision with real-time nutrition data. Simply scan your meal, and get detailed nutritional insights right when you need them.
 
 ![Built with Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
